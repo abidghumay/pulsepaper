@@ -1,23 +1,22 @@
 # 📑 PulsePaper – Automated Scientific Paper & Tech Article Dashboard
 
-PulsePaper is a single, self-contained, responsive web application and ingestion service designed to deliver an effortless morning reading ritual. Every morning at **5:00 AM Asia/Dhaka**, the system automatically fetches preprints and articles from configured arXiv feeds and tech sources, normalizes and deduplicates them in PostgreSQL, and serves them via an intuitive dashboard on both desktop and mobile.
+PulsePaper is a single, self-contained, responsive web application and paper ingestion service designed for an effortless morning reading ritual. Every morning at **5:00 AM Asia/Dhaka**, the system automatically fetches research papers and articles from configured arXiv feeds and tech sources, normalizes and deduplicates them in PostgreSQL, and serves them via an intuitive dashboard on both desktop and mobile.
 
 ---
 
 ## 1. What the Project Does
-- **Automated Daily Ingestion**: Runs a daily scheduled cron job at `05:00 AM (Asia/Dhaka)` to pull fresh research papers and tech articles.
-- **Resilient Multi-Source Ingestion**: Fetches from arXiv (cs.AI, cs.LG, cs.CR), Hacker News, MIT Technology Review, and TechCrunch AI with isolated error boundaries.
-- **Persistent Storage & Deduplication**: Stores articles in PostgreSQL with database-level URL uniqueness (`ON CONFLICT (url) DO NOTHING`).
+- **Automated Daily Ingestion**: Scheduled daily cron job at `05:00 AM (Asia/Dhaka)` to pull fresh research papers and tech articles.
+- **Resilient Multi-Source Ingestion**: Fetches from arXiv (cs.AI, cs.LG, cs.CR), Hacker News, MIT Technology Review, and TechCrunch AI with isolated per-source error boundaries.
+- **Persistent Storage & Deduplication**: Relational storage in PostgreSQL with database-level URL uniqueness (`ON CONFLICT (url) DO NOTHING`).
 - **Responsive Dashboard (PC & Mobile)**: Filter by Category, Unread, or Bookmarked/Saved items; search across titles, summaries, and authors.
-- **One-Click Paper Access**: Immediate links to open original research papers and articles.
-- **On-Demand AI & Extractive Summarization**: Generate concise, structured executive summaries using Google Gemini 2.5 Flash (free tier) with an automatic offline extractive NLP fallback if no API key is supplied.
-- **$0 / Month Operation**: Designed exclusively for free-tier infrastructure.
+- **Direct Paper Access**: Instant one-click links to original arXiv preprints and article sources.
+- **On-Demand AI & Extractive Summarization**: Generate concise, structured executive summaries using Google Gemini 2.5 Flash free tier, with an automatic offline extractive NLP fallback if no API key is supplied.
 
 ---
 
 ## 2. Architecture
 
-PulsePaper is designed as a **single monolithic full-stack application** with clean separation of responsibilities:
+PulsePaper is built as a **single monolithic application** with clean separation of responsibilities:
 
 ```
 dash/
@@ -47,105 +46,166 @@ dash/
 │   └── scheduler/           # scheduled job
 │       ├── cron.ts          # node-cron runner for 5:00 AM Asia/Dhaka
 │       └── manual.ts        # Manual CLI execution runner (`npm run ingest`)
-├── Dockerfile               # Multi-stage container build
-├── render.yaml              # Render free-tier deployment specification
-└── .env.example             # Documented environment variable template
+├── package.json             # Unified dependencies & build scripts
+└── .env.example             # Documented environment variables template
 ```
 
 ---
 
-## 3. Local Setup
+## 3. Prerequisites & Local Setup
 
 ### Prerequisites
-- Node.js `v20+` or `v24+`
-- npm `v10+`
+- **Node.js**: `v20+` or `v24+` installed ([Download Node.js](https://nodejs.org/))
+- **npm**: `v10+` (bundled with Node.js)
+- **Git**
 
 ### Installation
-```bash
-git clone <repo-url>
-cd dash
-npm install
-```
+1. Clone the repository or navigate to your project directory:
+   ```bash
+   cd dash
+   ```
 
-Copy the environment template:
-```bash
-cp .env.example .env
-```
+2. Install all dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Create your local environment file:
+   ```bash
+   cp .env.example .env
+   ```
 
 ---
 
 ## 4. Database Setup
 
-PulsePaper supports two modes:
+PulsePaper supports two database options:
 
-### A. Zero-Friction Embedded Local Mode (Default)
-If `DATABASE_URL` is empty in `.env`, PulsePaper automatically utilizes `@electric-sql/pglite` (an embedded, persistent WebAssembly build of PostgreSQL stored in `./.pgdata`).
-* **Zero installation required**: No local PostgreSQL service or Docker needed.
-* **100% PostgreSQL SQL dialect compatible**.
+### Option A: Zero-Setup Embedded PostgreSQL (Default & Recommended for Localhost)
+If `DATABASE_URL` is left empty in `.env`, PulsePaper automatically utilizes `@electric-sql/pglite` (an embedded, persistent WebAssembly build of PostgreSQL stored in `./.pgdata`).
+* **Zero installation required**: No PostgreSQL service, Docker, or native tools needed.
+* **Fully persistent**: Articles, read status, bookmarks, and summaries are saved to disk in `.pgdata/`.
+* **100% PostgreSQL compatible**: Runs standard PostgreSQL SQL, migrations, and indexes.
 
-### B. Standard PostgreSQL / Cloud Mode
-To connect to any local PostgreSQL instance or a free serverless cloud database (such as [Neon.tech](https://neon.tech)):
-1. Create a database in Neon ($0/month free tier, 0.5 GB storage).
-2. Set the connection string in `.env`:
+### Option B: External PostgreSQL (Local Postgres or Supabase)
+If you prefer connecting to a local PostgreSQL instance or a remote database (e.g. Supabase):
+1. Add your connection string to `.env`:
    ```env
-   DATABASE_URL=postgresql://user:password@ep-cool-db.us-east-2.aws.neon.tech/neondb?sslmode=require
+   DATABASE_URL=postgresql://postgres:password@localhost:5432/dash_db
    ```
-3. Run the migrations:
+   *(Or your Supabase URI: `postgresql://postgres.xxxx:password@aws-0-....pooler.supabase.com:6543/postgres?sslmode=require`)*
+2. Run migrations:
    ```bash
    npm run migrate
    ```
 
 ---
 
-## 5. Environment Variables
+## 5. Manual Build on Localhost
 
-Create a `.env` file based on `.env.example`:
+PulsePaper includes dedicated build scripts for compiling both the React frontend and the TypeScript Express backend:
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PORT` | Optional | `3001` | HTTP port for backend and static UI |
-| `NODE_ENV` | Optional | `development` | `development` or `production` |
-| `DATABASE_URL` | Optional | *empty (PGlite)* | PostgreSQL connection string (Neon / Render / local) |
-| `CRON_SCHEDULE` | Optional | `0 5 * * *` | Cron expression for ingestion (default: 5:00 AM daily) |
-| `CRON_TIMEZONE` | Optional | `Asia/Dhaka` | Timezone for the scheduled job |
-| `GEMINI_API_KEY` | Optional | *empty* | Free Google AI Studio API key for Gemini 2.5 Flash |
+### 1. Build the Frontend (Vite + Tailwind CSS)
+```bash
+npm run build:client
+```
+* Compiles the React SPA, Tailwind CSS styles, and assets into the `dist/` directory.
 
----
+### 2. Build the Backend (TypeScript Server)
+```bash
+npm run build:server
+```
+* Compiles the Express server, database layer, and ingestion engine into `dist/server/`.
 
-## 6. How to Run Frontend & Backend
-
-### Running in Production Mode (Single Process)
-Build both client and server, then run the unified server:
+### 3. Unified Production Build (Both Frontend & Backend)
 ```bash
 npm run build
-npm start
 ```
-Open [http://localhost:3001](http://localhost:3001) in your browser.
-
-### Running in Development Mode
-Start the Vite dev server with hot reload:
-```bash
-npm run dev
-```
-In a second terminal, run the Express backend watcher:
-```bash
-npm run dev:server
-```
+* Runs both `build:client` and `build:server` in sequence to produce a complete production-ready bundle.
 
 ---
 
-## 7. How to Run Ingestion Manually
+## 6. Running on Localhost
 
-You can trigger feed ingestion at any time through three methods:
+### Mode 1: Production Mode (Single Process)
+Run the compiled application as a single unified server serving both the REST API and the responsive web app:
+
+```bash
+# 1. Build the project
+npm run build
+
+# 2. Start the server
+npm start
+```
+
+Open your browser and navigate to:
+```text
+http://localhost:3001
+```
+
+### Mode 2: Development Mode (Hot-Reload)
+Run the Vite development server with instant hot module replacement alongside the backend watcher:
+
+```bash
+# Terminal 1: Start the React Vite dev server
+npm run dev
+
+# Terminal 2: Start the Express backend watcher
+npm run dev:server
+```
+* Frontend runs on `http://localhost:5173` (proxies `/api` requests to backend).
+* Backend runs on `http://localhost:3001`.
+
+---
+
+## 7. How to Access on Your Phone via Local Wi-Fi
+
+You can use the full application on your smartphone (iPhone or Android) while connected to the same Wi-Fi network as your PC:
+
+### Step 1: Find Your PC's Local IP Address
+In PowerShell, run:
+```powershell
+Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi*" | Select-Object IPAddress
+```
+*(Example output: `10.75.133.172` or `192.168.1.50`)*
+
+### Step 2: Open on Your Phone Browser
+1. Make sure your phone is connected to the same Wi-Fi.
+2. Open Safari (iOS) or Chrome (Android).
+3. Type in the address bar:
+   ```text
+   http://<YOUR-PC-IP>:3001
+   ```
+   *(e.g., `http://10.75.133.172:3001`)*
+
+### Step 3: Add to Phone Home Screen (Standalone App Mode)
+* **iPhone (Safari)**: Tap the **Share icon** (square with upward arrow) -> scroll down -> tap **"Add to Home Screen"** -> tap **Add**.
+* **Android (Chrome)**: Tap the **three vertical dots (⋮)** -> tap **"Add to Home screen"** / **"Install app"**.
+
+PulsePaper will install as an app icon on your home screen and open in full-screen standalone mode with no browser address bar.
+
+> **Windows Firewall Note**: If your phone cannot connect to `http://<YOUR-PC-IP>:3001`, allow port 3001 in an Administrator PowerShell window:
+> ```powershell
+> New-NetFirewallRule -DisplayName "PulsePaper Web" -Direction Inbound -LocalPort 3001 -Protocol TCP -Action Allow
+> ```
+
+---
+
+## 8. How to Run Ingestion Manually
+
+You can trigger a fresh feed ingestion at any time:
 
 ### Method 1: CLI Runner
 ```bash
 npm run ingest
 ```
-This runs migrations, fetches all active feeds, logs errors per source, deduplicates existing items, and prints a formatted summary table to your console.
+* Runs migrations.
+* Fetches all active arXiv and tech feeds.
+* Skips duplicates using `ON CONFLICT (url) DO NOTHING`.
+* Prints a summary table showing processed items and errors.
 
 ### Method 2: UI Button
-Click the **"Fetch Now"** button in the top navigation bar or the mobile navigation bar.
+Click the **"Fetch Now"** button in the top navigation bar or the mobile bottom bar.
 
 ### Method 3: REST API
 ```bash
@@ -154,20 +214,19 @@ curl -X POST http://localhost:3001/api/ingest
 
 ---
 
-## 8. How the 5 AM Scheduler Works
+## 9. How the 5 AM Scheduler Works
 
-The scheduler is implemented using `node-cron` in `src/scheduler/cron.ts`.
-- **Expression**: `0 5 * * *`
+The automated daily schedule is managed by `node-cron` in `src/scheduler/cron.ts`:
+- **Expression**: `0 5 * * *` (5:00 AM every day)
 - **Timezone**: `Asia/Dhaka` (`UTC+6`)
-- **Execution**: When the Express server boots (`startServer()`), `initDailyScheduler()` schedules the background job.
-- At 05:00:00 AM Asia/Dhaka every day, `runIngestionPipeline()` is triggered automatically.
-- Each source is fetched inside its own isolated try/catch block. If one source is offline or returns malformed XML, it records a failure in `ingestion_logs` and continues processing the remaining sources.
+- **Execution**: Automatically starts whenever `npm start` is executed.
+- When the timer triggers, `runIngestionPipeline()` fetches all enabled sources. Each source runs within an isolated `try/catch` boundary so one offline feed will never halt or affect other sources.
 
 ---
 
-## 9. How to Add a New Source
+## 10. How to Add a New Source
 
-Open `src/sources/defaultSources.ts` and add a new entry to `DEFAULT_SOURCES`:
+Open `src/sources/defaultSources.ts` and add a new entry to the `DEFAULT_SOURCES` array:
 
 ```typescript
 {
@@ -181,7 +240,7 @@ Open `src/sources/defaultSources.ts` and add a new entry to `DEFAULT_SOURCES`:
 }
 ```
 
-Or add dynamically at runtime using the REST API:
+Or add a source dynamically at runtime via the REST API:
 ```bash
 curl -X POST http://localhost:3001/api/sources \
   -H "Content-Type: application/json" \
@@ -196,65 +255,38 @@ curl -X POST http://localhost:3001/api/sources \
 
 ---
 
-## 10. How to Configure Summarization
+## 11. Configuring Summarization
 
-PulsePaper includes a two-tier summarization engine:
+PulsePaper provides a two-tier summarization system:
 
-1. **AI-Powered Summaries (Gemini 2.5 Flash)**:
+1. **AI-Powered Summaries (Google Gemini 2.5 Flash)**:
    - Obtain a free API key at [Google AI Studio](https://aistudio.google.com/).
-   - Add to `.env`:
+   - Add your key to `.env`:
      ```env
      GEMINI_API_KEY=AIzaSy...
      ```
    - Generates structured executive summaries with Core Contributions, Key Methodology, and Practical Implications.
 
-2. **Offline Extractive Summarizer (Fallback)**:
-   - If `GEMINI_API_KEY` is not provided or if the API encounters rate-limiting or network issues, PulsePaper automatically uses its built-in extractive NLP summarizer (`src/summarization/fallback.ts`).
-   - Requires **$0**, no accounts, and works completely offline.
+2. **Offline Extractive NLP Summarizer (Automatic Fallback)**:
+   - If `GEMINI_API_KEY` is not provided or if the network/API is unavailable, PulsePaper automatically uses its built-in offline extractive summarizer (`src/summarization/fallback.ts`).
+   - Requires **$0**, no accounts, and works 100% offline.
 
 ---
 
-## 11. How to Deploy for $0/Month
+## 12. Automated Verification & Test Suite
 
-### Option A: Render.com (Recommended $0/Month Stack)
-1. **Database**: Create a free PostgreSQL instance on [Neon.tech](https://neon.tech) ($0/month forever). Copy the `DATABASE_URL`.
-2. **Repository**: Push this repository to GitHub.
-3. **Deploy on Render**:
-   - Create a new **Web Service** on [Render.com](https://render.com).
-   - Connect your GitHub repo.
-   - Set Build Command: `npm install && npm run build`
-   - Set Start Command: `npm start`
-   - Add Environment Variables:
-     - `NODE_ENV`: `production`
-     - `DATABASE_URL`: *(Your Neon PostgreSQL URL)*
-     - `CRON_SCHEDULE`: `0 5 * * *`
-     - `CRON_TIMEZONE`: `Asia/Dhaka`
-     - `GEMINI_API_KEY`: *(Your free Gemini key, optional)*
-   - Click **Deploy Web Service**.
-
-### Option B: Docker Container Deployment
-Build and run the production container:
-```bash
-docker build -t pulsepaper .
-docker run -p 3001:3001 -e DATABASE_URL="postgresql://..." pulsepaper
-```
-
----
-
-## 12. Verification & Test Suite
-
-Run the automated test suite to verify all phases:
+Run the built-in test suite to verify all layers of the application:
 
 ```bash
-# 1. Test database migrations and CRUD operations (Phase 3)
+# 1. Test database schema migrations and CRUD persistence
 npm run test:db
 
-# 2. Test live feed ingestion and deduplication (Phases 4 & 5)
+# 2. Test live feed ingestion and deduplication
 npm run test:ingest
 
-# 3. Test on-demand summarization (Phase 8)
+# 3. Test on-demand summarization (Gemini & offline fallback)
 npm run test:summarize
 
-# 4. Compile frontend & backend builds (Phase 2 & 9)
+# 4. Verify full application compilation
 npm run build
 ```
