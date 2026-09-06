@@ -5,7 +5,6 @@ interface MarkdownViewProps {
 }
 
 export const MarkdownView: React.FC<MarkdownViewProps> = ({ content }) => {
-  // Parse markdown lines into structured elements
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let currentList: string[] = [];
@@ -17,7 +16,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content }) => {
           {currentList.map((item, idx) => (
             <li key={idx} className="flex items-start gap-2.5 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 mt-2 shrink-0" />
-              <div>{renderFormattedText(item)}</div>
+              <div className="flex-1">{renderFormattedText(item)}</div>
             </li>
           ))}
         </ul>
@@ -27,17 +26,54 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content }) => {
   };
 
   const renderFormattedText = (text: string): React.ReactNode => {
-    // Replace **bold** with <strong>
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
+    // 1. Split by URLs first
+    const urlRegex = /(https?:\/\/[^\s)]+)/g;
+    const urlParts = text.split(urlRegex);
+
+    return urlParts.map((urlPart, uIndex) => {
+      if (urlPart.match(/^https?:\/\//)) {
         return (
-          <strong key={index} className="font-semibold text-slate-900 dark:text-slate-100">
-            {part.slice(2, -2)}
-          </strong>
+          <a
+            key={`url-${uIndex}`}
+            href={urlPart}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 dark:text-indigo-400 underline hover:text-indigo-700 dark:hover:text-indigo-300 break-all inline-flex items-center gap-0.5 mx-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>{urlPart}</span>
+            <span className="text-xs">↗</span>
+          </a>
         );
       }
-      return part;
+
+      // 2. Handle **bold** inside non-URL parts
+      const boldParts = urlPart.split(/(\*\*.*?\*\*)/g);
+      return boldParts.map((bPart, bIndex) => {
+        if (bPart.startsWith('**') && bPart.endsWith('**')) {
+          return (
+            <strong key={`b-${uIndex}-${bIndex}`} className="font-semibold text-slate-900 dark:text-slate-100">
+              {bPart.slice(2, -2)}
+            </strong>
+          );
+        }
+
+        // 3. Handle `code`
+        const codeParts = bPart.split(/(`.*?`)/g);
+        return codeParts.map((cPart, cIndex) => {
+          if (cPart.startsWith('`') && cPart.endsWith('`')) {
+            return (
+              <code
+                key={`c-${uIndex}-${bIndex}-${cIndex}`}
+                className="px-1.5 py-0.5 text-xs font-mono rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300"
+              >
+                {cPart.slice(1, -1)}
+              </code>
+            );
+          }
+          return cPart;
+        });
+      });
     });
   };
 

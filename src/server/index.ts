@@ -102,18 +102,27 @@ app.post('/api/articles/:id/summarize', async (req: Request, res: Response) => {
     const article = await getArticleById(req.params.id);
     const title = article ? article.title : (req.body.title || 'Untitled');
     const content = article ? (article.summary || article.content || '') : (req.body.summary || req.body.content || '');
+    const url = article ? article.url : (req.body.url || '');
 
-    const result = await generateSummary(title, content);
+    const result = await generateSummary(title, content, url);
 
     if (article) {
       await updateArticleSummary(article.id, result.summary);
+      if (result.extractedText && (article.summary.includes('Article URL:') || article.summary.length < 150)) {
+        const client = await (await import('../db/client.js')).getDbClient();
+        await client.query('UPDATE articles SET summary = $1 WHERE id = $2', [
+          result.extractedText.slice(0, 1000) + '...',
+          article.id
+        ]);
+      }
     }
 
     res.json({
       summary: result.summary,
       provider: result.provider,
       model: result.model,
-      error: result.error
+      error: result.error,
+      extractedText: result.extractedText
     });
   } catch (err: any) {
     console.error('[API Error] Failed to summarize article:', err);

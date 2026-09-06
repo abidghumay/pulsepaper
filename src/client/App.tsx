@@ -167,6 +167,7 @@ export const App: React.FC = () => {
           title: article.title,
           summary: article.summary,
           content: article.content,
+          url: article.url,
           force
         })
       });
@@ -174,15 +175,22 @@ export const App: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const genSummary = data.summary;
+        const newAbstract = data.extractedText
+          ? data.extractedText.slice(0, 1000) + '...'
+          : article.summary;
 
         // Update in articles list
         setArticles((prev) =>
-          prev.map((a) => (a.id === article.id ? { ...a, ai_summary: genSummary } : a))
+          prev.map((a) =>
+            a.id === article.id ? { ...a, ai_summary: genSummary, summary: newAbstract } : a
+          )
         );
 
         // Update in active reader view
         setActiveReaderArticle((prev) =>
-          prev && prev.id === article.id ? { ...prev, ai_summary: genSummary } : prev
+          prev && prev.id === article.id
+            ? { ...prev, ai_summary: genSummary, summary: newAbstract }
+            : prev
         );
       }
     } catch (err) {

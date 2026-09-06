@@ -3,37 +3,42 @@ export async function summarizeWithGemini(
   abstract: string,
   apiKey: string
 ): Promise<{ summary: string; modelUsed: string }> {
-  const prompt = `You are a world-class scientific researcher and technical analyst. Provide an in-depth, exceptionally clear, and well-structured executive summary of the following research paper/article in clean GitHub-flavored markdown.
+  const isThin =
+    !abstract ||
+    abstract.length < 150 ||
+    abstract.includes('Article URL:') ||
+    abstract.includes('Comments URL:');
 
-Your summary must be thorough, precise, and immediately valuable to an engineer or researcher. Avoid vague generalities. Capture the exact technical nuances, benchmarks, and breakthroughs.
+  const contentContext = isThin
+    ? `[Context Note: The source feed only provided the title and a link without extended body text. Based on this technical title ("${title}"), synthesize a thorough, knowledgeable technical brief on this project, architecture, or research topic.]`
+    : `Abstract / Full Content:\n${abstract}`;
+
+  const prompt = `You are a world-class scientific researcher and technical analyst. Provide an in-depth, exceptionally clear, and well-structured executive summary of the following research paper, engineering release, or technical project in clean GitHub-flavored markdown.
+
+Your summary must be thorough, precise, and immediately valuable to an engineer or researcher. Avoid vague generic statements. Never output raw feed metadata like "Article URL" or "Points". Capture the technical substance, architecture, and real-world impact.
 
 Format your response with these exact sections:
 
 ### 📌 Core Thesis & TL;DR
-A compelling 2-3 sentence overview capturing what was achieved and why it represents a notable development.
+A compelling 2-3 sentence overview explaining what this project or paper accomplishes and why it is notable.
 
 ### 💡 The Problem & Context
-What critical challenge, architectural bottleneck, or open research question does this work address? Why was existing technology insufficient?
+What technical bottleneck, challenge, or motivation does this work address? Why is it relevant to the community?
 
-### ⚙️ Key Technical Innovations & Methodology
-- **Architecture / Method**: Specific technical description of the framework, algorithmic mechanism, or pipeline introduced.
-- **Implementation Highlights**: Detailed breakdown of mathematical formulation, training dynamics, or data processing.
-- **Optimization**: How inference latency, memory footprint, or scaling was addressed.
+### ⚙️ Key Technical Innovations & Architecture
+- **Methodology & Framework**: Specific technical explanation of the approach, architecture, or engineering mechanisms involved.
+- **Key Implementation Details**: How execution, data structures, compilation, or performance is handled.
+- **Performance / Efficiency**: Notable optimization techniques or scaling characteristics.
 
-### 📊 Benchmark Results & Empirical Findings
-- **Empirical Performance**: Exact metrics, accuracy numbers, latency gains, or parameter efficiency compared to prior baselines.
-- **Key Discoveries**: Insights discovered from ablation studies, scaling behavior, or qualitative analysis.
-
-### 🚀 Practical Applications & Trade-offs
-- **Real-World Impact**: Concrete applications where engineers or researchers can deploy this technology.
-- **Limitations**: Computational constraints, data dependencies, or remaining challenges.
+### 📊 Practical Applications & Takeaways
+- **Real-World Utility**: Where and how developers, researchers, or organizations can apply or test this.
+- **Considerations & Constraints**: Hardware requirements, compatibility limits, or potential open questions.
 
 Title: ${title}
-Abstract / Content:
-${abstract}
+${contentContext}
 `;
 
-  // Candidate models in order of priority (handles API version differences seamlessly)
+  // Candidate models in order of priority
   const candidateModels = [
     'gemini-2.5-flash',
     'gemini-1.5-flash',
@@ -67,7 +72,7 @@ ${abstract}
         const errBody = await response.text();
         console.warn(`[Gemini API] Model ${model} returned HTTP ${response.status}: ${errBody.slice(0, 150)}`);
         lastError = new Error(`HTTP ${response.status}: ${errBody}`);
-        continue; // Try next candidate model
+        continue;
       }
 
       const data = (await response.json()) as any;
@@ -77,7 +82,7 @@ ${abstract}
         return { summary: text.trim(), modelUsed: model };
       }
     } catch (err) {
-      console.warn(`[Gemini API] Network/call error with model ${model}:`, err);
+      console.warn(`[Gemini API] Network error with model ${model}:`, err);
       lastError = err;
     }
   }
