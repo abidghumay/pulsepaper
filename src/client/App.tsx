@@ -5,16 +5,17 @@ import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
 import { StatsBar } from './components/StatsBar';
 import { ArticleCard } from './components/ArticleCard';
-import { DetailModal } from './components/DetailModal';
-import { SummaryModal } from './components/SummaryModal';
+import { ReaderView } from './components/ReaderView';
 import { MobileNav } from './components/MobileNav';
-import { Newspaper, Sparkles, Inbox, RefreshCw, AlertCircle } from 'lucide-react';
+import { Inbox, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Theme state
   const [isDark, setIsDark] = useState<boolean>(() => {
-    return localStorage.getItem('theme') === 'dark' ||
-      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return (
+      localStorage.getItem('theme') === 'dark' ||
+      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    );
   });
 
   // Articles & Sources state
@@ -24,18 +25,16 @@ export const App: React.FC = () => {
   const [isIngesting, setIsIngesting] = useState<boolean>(false);
   const [ingestStatus, setIngestStatus] = useState<string | null>(null);
 
+  // Active Reader Full-Page View state
+  const [activeReaderArticle, setActiveReaderArticle] = useState<Article | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
+
   // Filters & Search state
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortOption, setSortOption] = useState<SortOption>('newest');
-
-  // Modals state
-  const [detailArticle, setDetailArticle] = useState<Article | null>(null);
-  const [summaryArticle, setSummaryArticle] = useState<Article | null>(null);
-  const [summaryText, setSummaryText] = useState<string | null>(null);
-  const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
 
   // Sync theme
   useEffect(() => {
@@ -48,7 +47,7 @@ export const App: React.FC = () => {
     }
   }, [isDark]);
 
-  // Fetch articles and sources from API if available, fallback to mock data
+  // Load articles and sources from API
   const loadData = async () => {
     try {
       setIsLoading(true);
@@ -71,7 +70,7 @@ export const App: React.FC = () => {
         }
       }
     } catch (err) {
-      console.log('Backend API not yet active; utilizing client mock state.', err);
+      console.log('Backend API not yet active; using client fallback data.', err);
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +79,26 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Hash-based navigation for deep-linking and browser back-button support
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#article-')) {
+        const id = hash.replace('#article-', '');
+        const found = articles.find((a) => a.id === id);
+        if (found) {
+          setActiveReaderArticle(found);
+        }
+      } else {
+        setActiveReaderArticle(null);
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [articles]);
 
   // Compute distinct categories
   const categories = useMemo(() => {
@@ -105,15 +124,14 @@ export const App: React.FC = () => {
       prev.map((art) => (art.id === id ? { ...art, read_status: !art.read_status } : art))
     );
 
-    // Sync with modal if open
-    if (detailArticle && detailArticle.id === id) {
-      setDetailArticle((prev) => prev ? { ...prev, read_status: !prev.read_status } : null);
+    if (activeReaderArticle && activeReaderArticle.id === id) {
+      setActiveReaderArticle((prev) => (prev ? { ...prev, read_status: !prev.read_status } : null));
     }
 
     try {
       await fetch(`/api/articles/${id}/read`, { method: 'POST' });
     } catch {
-      // Offline / mock mode
+      // Offline fallback
     }
   };
 
@@ -123,31 +141,24 @@ export const App: React.FC = () => {
       prev.map((art) => (art.id === id ? { ...art, saved_status: !art.saved_status } : art))
     );
 
-    // Sync with modal if open
-    if (detailArticle && detailArticle.id === id) {
-      setDetailArticle((prev) => prev ? { ...prev, saved_status: !prev.saved_status } : null);
+    if (activeReaderArticle && activeReaderArticle.id === id) {
+      setActiveReaderArticle((prev) => (prev ? { ...prev, saved_status: !prev.saved_status } : null));
     }
 
     try {
       await fetch(`/api/articles/${id}/save`, { method: 'POST' });
     } catch {
-      // Offline / mock mode
+      // Offline fallback
     }
   };
 
-  // On-demand Summarization Handler
-  const handleOpenSummarize = async (article: Article) => {
-    setSummaryArticle(article);
-
-    if (article.ai_summary) {
-      setSummaryText(article.ai_summary);
+  // Fetch or regenerate summary
+  const fetchSummary = async (article: Article, force = false): Promise<void> => {
+    if (!force && article.ai_summary) {
       return;
     }
 
-    // Generate summary
     setIsSummarizing(true);
-    setSummaryText(null);
-
     try {
       const res = await fetch(`/api/articles/${article.id}/summarize`, {
         method: 'POST',
@@ -155,41 +166,41 @@ export const App: React.FC = () => {
         body: JSON.stringify({
           title: article.title,
           summary: article.summary,
-          content: article.content
+          content: article.content,
+          force
         })
       });
 
       if (res.ok) {
         const data = await res.json();
         const genSummary = data.summary;
-        setSummaryText(genSummary);
-        // Update local article
+
+        // Update in articles list
         setArticles((prev) =>
           prev.map((a) => (a.id === article.id ? { ...a, ai_summary: genSummary } : a))
         );
-      } else {
-        // Fallback local extractive summary generator
-        generateLocalSummary(article);
+
+        // Update in active reader view
+        setActiveReaderArticle((prev) =>
+          prev && prev.id === article.id ? { ...prev, ai_summary: genSummary } : prev
+        );
       }
-    } catch {
-      generateLocalSummary(article);
+    } catch (err) {
+      console.error('Failed to generate summary:', err);
     } finally {
       setIsSummarizing(false);
     }
   };
 
-  const generateLocalSummary = (article: Article) => {
-    const sentences = article.summary
-      .split(/(?<=[.?!])\s+/)
-      .filter((s) => s.trim().length > 15);
+  // Open Full-Page Reader
+  const handleOpenReader = (article: Article, autoSummarize = true) => {
+    setActiveReaderArticle(article);
+    window.location.hash = `article-${article.id}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    const bullets = sentences.slice(0, 3).map((s) => `- ${s.trim()}`).join('\n');
-    const localSummary = `### Summary Highlights\n${bullets || '- ' + article.summary}\n\n- **Category**: ${article.category}\n- **Source**: ${article.source_name}`;
-
-    setSummaryText(localSummary);
-    setArticles((prev) =>
-      prev.map((a) => (a.id === article.id ? { ...a, ai_summary: localSummary } : a))
-    );
+    if (autoSummarize && !article.ai_summary) {
+      fetchSummary(article, false);
+    }
   };
 
   // Trigger Manual Ingestion
@@ -203,10 +214,10 @@ export const App: React.FC = () => {
         setIngestStatus(`Fetched ${result.itemsIngested || 0} new items successfully.`);
         await loadData();
       } else {
-        setIngestStatus('Ingestion completed with fallback.');
+        setIngestStatus('Ingestion completed.');
       }
     } catch {
-      setIngestStatus('Manual fetch triggered (offline mode simulated).');
+      setIngestStatus('Feed ingestion triggered.');
     } finally {
       setIsIngesting(false);
       setTimeout(() => setIngestStatus(null), 4000);
@@ -217,17 +228,12 @@ export const App: React.FC = () => {
   const filteredArticles = useMemo(() => {
     return articles
       .filter((article) => {
-        // Tab filter
         if (activeTab === 'unread' && article.read_status) return false;
         if (activeTab === 'saved' && !article.saved_status) return false;
 
-        // Category filter
         if (selectedCategory !== 'all' && article.category !== selectedCategory) return false;
-
-        // Source filter
         if (selectedSource !== 'all' && article.source_id !== selectedSource) return false;
 
-        // Search query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchTitle = article.title.toLowerCase().includes(q);
@@ -256,6 +262,48 @@ export const App: React.FC = () => {
   const unreadCount = useMemo(() => articles.filter((a) => !a.read_status).length, [articles]);
   const savedCount = useMemo(() => articles.filter((a) => a.saved_status).length, [articles]);
 
+  // RENDER DEDICATED FULL-PAGE READER VIEW
+  if (activeReaderArticle) {
+    const currentIndex = filteredArticles.findIndex((a) => a.id === activeReaderArticle.id);
+    const hasPrev = currentIndex > 0;
+    const hasNext = currentIndex >= 0 && currentIndex < filteredArticles.length - 1;
+
+    return (
+      <ReaderView
+        article={activeReaderArticle}
+        onBack={() => {
+          window.location.hash = '';
+          setActiveReaderArticle(null);
+        }}
+        onToggleRead={handleToggleRead}
+        onToggleSave={handleToggleSave}
+        onRegenerateSummary={(art) => fetchSummary(art, true)}
+        isGeneratingSummary={isSummarizing}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        onPrevArticle={() => {
+          if (hasPrev) {
+            const prev = filteredArticles[currentIndex - 1];
+            setActiveReaderArticle(prev);
+            window.location.hash = `article-${prev.id}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (!prev.ai_summary) fetchSummary(prev, false);
+          }
+        }}
+        onNextArticle={() => {
+          if (hasNext) {
+            const next = filteredArticles[currentIndex + 1];
+            setActiveReaderArticle(next);
+            window.location.hash = `article-${next.id}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (!next.ai_summary) fetchSummary(next, false);
+          }
+        }}
+      />
+    );
+  }
+
+  // RENDER MAIN FEED VIEW
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col pb-20 sm:pb-8">
       {/* Top Navbar */}
@@ -320,8 +368,7 @@ export const App: React.FC = () => {
                 article={article}
                 onToggleRead={handleToggleRead}
                 onToggleSave={handleToggleSave}
-                onSummarize={handleOpenSummarize}
-                onSelectArticle={setDetailArticle}
+                onOpenReader={(art) => handleOpenReader(art, true)}
               />
             ))}
           </div>
@@ -348,32 +395,6 @@ export const App: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Article Full Detail Modal */}
-      <DetailModal
-        article={detailArticle}
-        onClose={() => setDetailArticle(null)}
-        onToggleRead={handleToggleRead}
-        onToggleSave={handleToggleSave}
-        onSummarize={(art) => {
-          setDetailArticle(null);
-          handleOpenSummarize(art);
-        }}
-      />
-
-      {/* AI Summary Modal */}
-      <SummaryModal
-        article={summaryArticle}
-        summary={summaryText}
-        isLoading={isSummarizing}
-        onClose={() => {
-          setSummaryArticle(null);
-          setSummaryText(null);
-        }}
-        onRegenerate={() => {
-          if (summaryArticle) handleOpenSummarize(summaryArticle);
-        }}
-      />
 
       {/* Mobile Fixed Bottom Navigation */}
       <MobileNav

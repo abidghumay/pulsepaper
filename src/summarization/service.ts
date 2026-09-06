@@ -1,20 +1,44 @@
 import { summarizeWithGemini } from './gemini.js';
 import { summarizeExtractive } from './fallback.js';
 
-export async function generateSummary(title: string, contentOrAbstract: string): Promise<string> {
+export interface SummaryResult {
+  summary: string;
+  provider: 'gemini' | 'extractive';
+  model?: string;
+  error?: string;
+}
+
+export async function generateSummary(
+  title: string,
+  contentOrAbstract: string
+): Promise<SummaryResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
 
   if (apiKey) {
     try {
-      console.log('[Summarization] Utilizing Gemini 2.5 Flash API...');
-      return await summarizeWithGemini(title, contentOrAbstract, apiKey);
+      console.log('[Summarization] Requesting AI summary via Gemini API...');
+      const result = await summarizeWithGemini(title, contentOrAbstract, apiKey);
+      return {
+        summary: result.summary,
+        provider: 'gemini',
+        model: result.modelUsed
+      };
     } catch (err: any) {
-      console.warn('[Summarization Warning] Gemini API failed or rate-limited; falling back to extractive NLP:', err?.message || err);
+      console.error('[Summarization Error] Gemini API generation failed:', err?.message || err);
       // Fallback
+      const fallbackText = summarizeExtractive(title, contentOrAbstract);
+      return {
+        summary: fallbackText,
+        provider: 'extractive',
+        error: err?.message || 'Gemini API call failed'
+      };
     }
   } else {
-    console.log('[Summarization] GEMINI_API_KEY not configured; using high-accuracy extractive NLP summarizer.');
+    console.log('[Summarization] GEMINI_API_KEY not configured; using offline extractive NLP summarizer.');
+    const fallbackText = summarizeExtractive(title, contentOrAbstract);
+    return {
+      summary: fallbackText,
+      provider: 'extractive'
+    };
   }
-
-  return summarizeExtractive(title, contentOrAbstract);
 }

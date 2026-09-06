@@ -103,13 +103,18 @@ app.post('/api/articles/:id/summarize', async (req: Request, res: Response) => {
     const title = article ? article.title : (req.body.title || 'Untitled');
     const content = article ? (article.summary || article.content || '') : (req.body.summary || req.body.content || '');
 
-    const summary = await generateSummary(title, content);
+    const result = await generateSummary(title, content);
 
     if (article) {
-      await updateArticleSummary(article.id, summary);
+      await updateArticleSummary(article.id, result.summary);
     }
 
-    res.json({ summary });
+    res.json({
+      summary: result.summary,
+      provider: result.provider,
+      model: result.model,
+      error: result.error
+    });
   } catch (err: any) {
     console.error('[API Error] Failed to summarize article:', err);
     res.status(500).json({ error: 'Failed to generate summary' });

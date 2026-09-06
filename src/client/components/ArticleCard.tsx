@@ -6,16 +6,14 @@ interface ArticleCardProps {
   article: Article;
   onToggleRead: (id: string) => void;
   onToggleSave: (id: string) => void;
-  onSummarize: (article: Article) => void;
-  onSelectArticle: (article: Article) => void;
+  onOpenReader: (article: Article) => void;
 }
 
 export const ArticleCard: React.FC<ArticleCardProps> = ({
   article,
   onToggleRead,
   onToggleSave,
-  onSummarize,
-  onSelectArticle,
+  onOpenReader,
 }) => {
   // Format relative timestamp
   const formatTime = (isoString: string) => {
@@ -34,11 +32,12 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
 
   return (
     <article
-      className={`group relative rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden ${
+      className={`group relative rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden cursor-pointer ${
         article.read_status
           ? 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-800/60 opacity-85 hover:opacity-100'
           : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60'
       }`}
+      onClick={() => onOpenReader(article)}
     >
       {/* Top Banner / Metadata */}
       <div className="p-5 pb-3">
@@ -56,7 +55,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
 
             {/* AI Summary Available Badge */}
             {article.ai_summary && (
-              <span className="flex items-center gap-1 text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200/40 dark:border-purple-900/40">
+              <span className="flex items-center gap-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-200/40 dark:border-indigo-900/40">
                 <Sparkles className="w-2.5 h-2.5" /> Summary Ready
               </span>
             )}
@@ -76,15 +75,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
 
         {/* Title */}
         <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug tracking-tight mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline flex items-start gap-1"
-          >
-            <span>{article.title}</span>
-            <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-1 text-slate-400" />
-          </a>
+          <span>{article.title}</span>
         </h2>
 
         {/* Author */}
@@ -102,33 +93,24 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
       </div>
 
       {/* Action Footer */}
-      <div className="px-5 py-3 bg-slate-50/50 dark:bg-slate-900/80 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 mt-auto">
-        {/* Left Actions: Read / Details & Summarize */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Read Abstract / Full Details Modal */}
-          <button
-            onClick={() => onSelectArticle(article)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Details</span>
-          </button>
+      <div
+        className="px-5 py-3 bg-slate-50/50 dark:bg-slate-900/80 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 mt-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Left Actions: Read Full Brief & Summary */}
+        <button
+          onClick={() => onOpenReader(article)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            article.ai_summary
+              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 hover:bg-indigo-50 hover:text-indigo-600'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+          <span>{article.ai_summary ? 'Read Brief' : 'Summarize & Read'}</span>
+        </button>
 
-          {/* AI Summarize Button */}
-          <button
-            onClick={() => onSummarize(article)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-              article.ai_summary
-                ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60'
-                : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{article.ai_summary ? 'View Summary' : 'Summarize'}</span>
-          </button>
-        </div>
-
-        {/* Right Actions: Mark Read & Bookmark */}
+        {/* Right Actions: Mark Read, Bookmark, External Link */}
         <div className="flex items-center gap-1">
           {/* Mark Read Toggle */}
           <button
