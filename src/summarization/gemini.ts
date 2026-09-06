@@ -1,48 +1,65 @@
+import { decodeHtmlEntities } from '../ingestion/htmlEntities.js';
+
 export async function summarizeWithGemini(
   title: string,
   abstract: string,
   apiKey: string
 ): Promise<{ summary: string; modelUsed: string }> {
+  // Strip any accidental wrapping quotes or spaces that users often paste into Render environment variables
+  const cleanKey = (apiKey || '').trim().replace(/^["']|["']$/g, '').trim();
+  if (!cleanKey) {
+    throw new Error('GEMINI_API_KEY is empty or contains only quotation marks');
+  }
+
+  const cleanTitle = decodeHtmlEntities(title || 'Research Overview');
+  const cleanAbstract = decodeHtmlEntities(abstract || '');
+
   const isThin =
-    !abstract ||
-    abstract.length < 150 ||
-    abstract.includes('Article URL:') ||
-    abstract.includes('Comments URL:');
+    !cleanAbstract ||
+    cleanAbstract.length < 150 ||
+    cleanAbstract.includes('Article URL:') ||
+    cleanAbstract.includes('Comments URL:');
 
   const contentContext = isThin
-    ? `[Context Note: The source feed only provided the title and a link without extended body text. Based on this technical title ("${title}"), synthesize a thorough, knowledgeable technical brief on this project, architecture, or research topic.]`
-    : `Abstract / Full Content:\n${abstract}`;
+    ? `[Context Note: The source entry only provided the headline and link. Based on the technical subject ("${cleanTitle}"), synthesize a comprehensive, deeply knowledgeable technical brief explaining the technology, system architecture, engineering challenges, and practical significance.]`
+    : `Article Content / Abstract:\n${cleanAbstract}`;
 
-  const prompt = `You are a world-class scientific researcher and technical analyst. Provide an in-depth, exceptionally clear, and well-structured executive summary of the following research paper, engineering release, or technical project in clean GitHub-flavored markdown.
+  const prompt = `You are a world-class scientific communicator, technical editor, and systems engineer.
+Your task is to write a comprehensive, clear, and highly engaging executive brief for the technical release, scientific discovery, or research paper titled below.
 
-Your summary must be thorough, precise, and immediately valuable to an engineer or researcher. Avoid vague generic statements. Never output raw feed metadata like "Article URL" or "Points". Capture the technical substance, architecture, and real-world impact.
+MANDATORY RULES:
+1. MINIMUM LENGTH: The summary MUST be at least 10 to 15 substantive lines. Do not produce brief, truncated, or lazy outputs.
+2. ACCESSIBLE YET RIGOROUS: Write in clear, compelling English that any software engineer, tech executive, or researcher can understand at a glance. Avoid dry jargon dumps, but explain the real engineering substance.
+3. ABSOLUTE PROHIBITION ON JUNK: Do not include PR contact info, names of PR spokespersons (e.g. Franziska Kegel), email addresses, phone numbers, HTML entity codes (like &ldquo;), or feed metadata (like Article URL, points, comments).
+4. STRICT MARKDOWN FORMAT: Use the exact markdown sections below with their emojis:
 
-Format your response with these exact sections:
+### 📌 Executive Overview & Core Breakthrough
+Write 3 to 4 engaging, well-crafted sentences summarizing the core breakthrough, what was accomplished, the key parties involved, and why this milestone matters today.
 
-### 📌 Core Thesis & TL;DR
-A compelling 2-3 sentence overview explaining what this project or paper accomplishes and why it is notable.
+### ⚙️ How It Works & Key Innovations
+Provide 3 to 4 detailed, substantive bullet points breaking down the engineering mechanisms, architecture, or research methodology:
+- **Core Technology & Architecture**: Specific details on how the system, propulsion, algorithm, or hardware is designed.
+- **Operational Execution & Deployment**: How it was tested, launched, trained, or deployed in practice.
+- **Performance & Key Metrics**: Notable specifications, payload capacity, efficiency gains, or benchmark results.
 
-### 💡 The Problem & Context
-What technical bottleneck, challenge, or motivation does this work address? Why is it relevant to the community?
+### 🚀 Real-World Impact & Industry Significance
+Provide 2 to 3 detailed bullet points explaining why this is a game-changer:
+- **Market & Ecosystem Influence**: How this alters the competitive landscape, unlocks new capabilities, or reduces costs/barriers to entry.
+- **Practical Utility**: How engineers, researchers, or organizations can benefit from or build upon this work.
 
-### ⚙️ Key Technical Innovations & Architecture
-- **Methodology & Framework**: Specific technical explanation of the approach, architecture, or engineering mechanisms involved.
-- **Key Implementation Details**: How execution, data structures, compilation, or performance is handled.
-- **Performance / Efficiency**: Notable optimization techniques or scaling characteristics.
+### 💡 Key Takeaways & What's Next
+Provide 2 forward-looking bullet points highlighting the immediate implications and upcoming milestones or next production phases.
 
-### 📊 Practical Applications & Takeaways
-- **Real-World Utility**: Where and how developers, researchers, or organizations can apply or test this.
-- **Considerations & Constraints**: Hardware requirements, compatibility limits, or potential open questions.
-
-Title: ${title}
+Title: ${cleanTitle}
 ${contentContext}
 `;
 
-  // Candidate models in order of priority
+  // Candidate models in order of stability and quota availability
   const candidateModels = [
-    'gemini-2.5-flash',
-    'gemini-1.5-flash',
     'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash-latest',
     'gemini-1.5-pro'
   ];
 
@@ -50,7 +67,7 @@ ${contentContext}
 
   for (const model of candidateModels) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
 
       const response = await fetch(url, {
         method: 'POST',
@@ -70,19 +87,19 @@ ${contentContext}
 
       if (!response.ok) {
         const errBody = await response.text();
-        console.warn(`[Gemini API] Model ${model} returned HTTP ${response.status}: ${errBody.slice(0, 150)}`);
-        lastError = new Error(`HTTP ${response.status}: ${errBody}`);
+        console.warn(`[Gemini API] Model ${model} returned HTTP ${response.status}: ${errBody.slice(0, 200)}`);
+        lastError = new Error(`HTTP ${response.status} on ${model}: ${errBody.slice(0, 150)}`);
         continue;
       }
 
       const data = (await response.json()) as any;
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text && text.trim().length > 0) {
-        console.log(`[Gemini API] Successfully generated summary using ${model}`);
+      if (text && text.trim().length > 100) {
+        console.log(`[Gemini API] Successfully generated 10+ line summary using ${model}`);
         return { summary: text.trim(), modelUsed: model };
       }
-    } catch (err) {
-      console.warn(`[Gemini API] Network error with model ${model}:`, err);
+    } catch (err: any) {
+      console.warn(`[Gemini API] Network or fetch error with model ${model}:`, err?.message || err);
       lastError = err;
     }
   }

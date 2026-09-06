@@ -1,6 +1,7 @@
 import React from 'react';
 import { Article } from '../types';
 import { ExternalLink, Bookmark, CheckCircle2, Circle, Sparkles, BookOpen, Clock, User } from 'lucide-react';
+import { cleanHtmlText } from '../utils';
 
 interface ArticleCardProps {
   article: Article;
@@ -75,7 +76,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
 
         {/* Title */}
         <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug tracking-tight mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-          <span>{article.title}</span>
+          <span>{cleanHtmlText(article.title)}</span>
         </h2>
 
         {/* Author */}
@@ -88,7 +89,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
 
         {/* Abstract / Summary Snippet */}
         <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-3 leading-relaxed">
-          {article.summary}
+          {cleanHtmlText(article.summary)}
         </p>
       </div>
 

@@ -1,0 +1,104 @@
+// Comprehensive HTML Entity Decoder and Text Cleaner
+
+export function decodeHtmlEntities(raw: string): string {
+  if (!raw) return '';
+
+  const entities: Record<string, string> = {
+    '&ldquo;': '"',
+    '&rdquo;': '"',
+    '&lsquo;': "'",
+    '&rsquo;': "'",
+    '&sbquo;': "'",
+    '&bdquo;': '"',
+    '&apos;': "'",
+    '&quot;': '"',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&hellip;': '…',
+    '&nbsp;': ' ',
+    '&oslash;': 'ø',
+    '&Oslash;': 'Ø',
+    '&aring;': 'å',
+    '&Aring;': 'Å',
+    '&aelig;': 'æ',
+    '&AElig;': 'Æ',
+    '&auml;': 'ä',
+    '&ouml;': 'ö',
+    '&uuml;': 'ü',
+    '&Auml;': 'Ä',
+    '&Ouml;': 'Ö',
+    '&Uuml;': 'Ü',
+    '&szlig;': 'ß',
+    '&eacute;': 'é',
+    '&Eacute;': 'É',
+    '&egrave;': 'è',
+    '&Egrave;': 'È',
+    '&ecirc;': 'ê',
+    '&Ecirc;': 'Ê',
+    '&euml;': 'ë',
+    '&Euml;': 'Ë',
+    '&agrave;': 'à',
+    '&Agrave;': 'À',
+    '&aacute;': 'á',
+    '&Aacute;': 'Á',
+    '&acirc;': 'â',
+    '&Acirc;': 'Â',
+    '&atilde;': 'ã',
+    '&Atilde;': 'Ã',
+    '&ccedil;': 'ç',
+    '&Ccedil;': 'Ç',
+    '&ntilde;': 'ñ',
+    '&Ntilde;': 'Ñ',
+    '&bull;': '•',
+    '&middot;': '·',
+    '&deg;': '°',
+    '&plusmn;': '±',
+    '&times;': '×',
+    '&divide;': '÷',
+    '&euro;': '€',
+    '&pound;': '£',
+    '&yen;': '¥',
+    '&copy;': '©',
+    '&reg;': '®',
+    '&trade;': '™'
+  };
+
+  let text = raw;
+
+  // Replace named entities
+  for (const [entity, char] of Object.entries(entities)) {
+    text = text.replaceAll(entity, char);
+  }
+
+  // Replace numeric entities &#123; or &#x1f;
+  text = text.replace(/&#(\d+);/g, (_, dec) => {
+    try {
+      const code = parseInt(dec, 10);
+      return String.fromCodePoint ? String.fromCodePoint(code) : String.fromCharCode(code);
+    } catch {
+      return '';
+    }
+  });
+
+  text = text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+    try {
+      const code = parseInt(hex, 16);
+      return String.fromCodePoint ? String.fromCodePoint(code) : String.fromCharCode(code);
+    } catch {
+      return '';
+    }
+  });
+
+  // Filter out PR / Press contact lines and boilerplate names
+  text = text.replace(/Press Contact:?[\s\S]*?(?=\n\n|$)/gi, '');
+  text = text.replace(/Media Contact:?[\s\S]*?(?=\n\n|$)/gi, '');
+  text = text.replace(/PR Contact:?[\s\S]*?(?=\n\n|$)/gi, '');
+  text = text.replace(/Press Contact\s+[A-Za-z\s]+/gi, '');
+  text = text.replace(/Franziska\s+Kegel/gi, '');
+  text = text.replace(/For media inquiries:?[\s\S]*?(?=\n\n|$)/gi, '');
+
+  return text.trim();
+}

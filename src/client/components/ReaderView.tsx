@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Article } from '../types';
 import { MarkdownView } from './MarkdownView';
+import { cleanHtmlText } from '../utils';
 import {
   ArrowLeft,
   ExternalLink,
@@ -46,17 +47,18 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    const textToCopy = article.ai_summary || article.summary;
+    const textToCopy = cleanHtmlText(article.ai_summary || article.summary);
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = () => {
+    const cleanTitle = cleanHtmlText(article.title);
     if (navigator.share) {
       navigator.share({
-        title: article.title,
-        text: `Summary of ${article.title}`,
+        title: cleanTitle,
+        text: `Summary of ${cleanTitle}`,
         url: article.url,
       }).catch(() => {});
     } else {
@@ -163,7 +165,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
             {/* Big Headline */}
             <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight">
-              {article.title}
+              {cleanHtmlText(article.title)}
             </h1>
 
             {/* Authors */}
@@ -230,7 +232,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 </div>
               ) : article.ai_summary ? (
                 <div className="prose prose-slate dark:prose-invert max-w-none">
-                  <MarkdownView content={article.ai_summary} />
+                  <MarkdownView content={cleanHtmlText(article.ai_summary)} />
                 </div>
               ) : (
                 <div className="py-8 text-center space-y-3">
@@ -255,7 +257,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               Original Paper Abstract & Text
             </h3>
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-7 text-sm sm:text-base leading-relaxed text-slate-700 dark:text-slate-300 shadow-xs whitespace-pre-line">
-              {article.summary}
+              {cleanHtmlText(article.summary)}
             </div>
           </section>
 

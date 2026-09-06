@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from './htmlEntities.js';
+
 export async function extractArticleTextFromUrl(url: string, timeoutMs = 8000): Promise<string> {
   if (!url || !url.startsWith('http')) return '';
 
@@ -21,7 +23,7 @@ export async function extractArticleTextFromUrl(url: string, timeoutMs = 8000): 
     const metaMatch =
       html.match(/<meta\s+name=["']description["']\s+content=["'](.*?)["']/i) ||
       html.match(/<meta\s+property=["']og:description["']\s+content=["'](.*?)["']/i);
-    const metaDesc = metaMatch ? metaMatch[1].trim() : '';
+    const metaDesc = metaMatch ? decodeHtmlEntities(metaMatch[1]).trim() : '';
 
     // 2. Remove script, style, nav, footer, header, svg tags
     const clean = html
@@ -37,12 +39,14 @@ export async function extractArticleTextFromUrl(url: string, timeoutMs = 8000): 
     const paragraphs: string[] = [];
     const pMatches = clean.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
     for (const p of pMatches) {
-      const text = p
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (text.length > 25) {
+      const rawText = p.replace(/<[^>]+>/g, ' ');
+      const text = decodeHtmlEntities(rawText).replace(/\s+/g, ' ').trim();
+      if (
+        text.length > 25 &&
+        !text.toLowerCase().startsWith('press contact') &&
+        !text.toLowerCase().startsWith('media contact') &&
+        !text.toLowerCase().includes('franziska kegel')
+      ) {
         paragraphs.push(text);
       }
     }

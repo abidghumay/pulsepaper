@@ -1,6 +1,7 @@
 import { summarizeWithGemini } from './gemini.js';
 import { summarizeExtractive } from './fallback.js';
 import { extractArticleTextFromUrl } from '../ingestion/pageExtractor.js';
+import { decodeHtmlEntities } from '../ingestion/htmlEntities.js';
 
 export interface SummaryResult {
   summary: string;
@@ -15,7 +16,8 @@ export async function generateSummary(
   contentOrAbstract: string,
   url?: string
 ): Promise<SummaryResult> {
-  let textToSummarize = contentOrAbstract?.trim() || '';
+  const cleanTitle = decodeHtmlEntities(title || 'Research Overview');
+  let textToSummarize = decodeHtmlEntities(contentOrAbstract?.trim() || '');
   let extractedText: string | undefined;
 
   // If content is very thin, missing, or just a URL stub (common with Hacker News RSS), fetch the real article page!
@@ -30,17 +32,19 @@ export async function generateSummary(
     const pageText = await extractArticleTextFromUrl(url);
     if (pageText && pageText.length > 150) {
       console.log(`[Summarization] Successfully extracted ${pageText.length} characters from web page.`);
-      textToSummarize = pageText;
-      extractedText = pageText;
+      textToSummarize = decodeHtmlEntities(pageText);
+      extractedText = textToSummarize;
     }
   }
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  // Strip wrapping quotes and whitespace from environment variable
+  const rawKey = process.env.GEMINI_API_KEY?.trim();
+  const apiKey = rawKey ? rawKey.replace(/^["']|["']$/g, '').trim() : '';
 
-  if (apiKey) {
+  if (apiKey && apiKey.length > 10) {
     try {
-      console.log('[Summarization] Requesting AI summary via Gemini API...');
-      const result = await summarizeWithGemini(title, textToSummarize, apiKey);
+      console.log('[Summarization] Requesting AI summary via Google Gemini API...');
+      const result = await summarizeWithGemini(cleanTitle, textToSummarize, apiKey);
       return {
         summary: result.summary,
         provider: 'gemini',
@@ -50,7 +54,7 @@ export async function generateSummary(
     } catch (err: any) {
       console.error('[Summarization Error] Gemini API generation failed:', err?.message || err);
       // Fallback
-      const fallbackText = summarizeExtractive(title, textToSummarize);
+      const fallbackText = summarizeExtractive(cleanTitle, textToSummarize);
       return {
         summary: fallbackText,
         provider: 'extractive',
@@ -59,8 +63,8 @@ export async function generateSummary(
       };
     }
   } else {
-    console.log('[Summarization] GEMINI_API_KEY not configured; using offline extractive NLP summarizer.');
-    const fallbackText = summarizeExtractive(title, textToSummarize);
+    console.log('[Summarization] GEMINI_API_KEY not configured or empty; using offline extractive NLP summarizer.');
+    const fallbackText = summarizeExtractive(cleanTitle, textToSummarize);
     return {
       summary: fallbackText,
       provider: 'extractive',

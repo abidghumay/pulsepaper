@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import { decodeHtmlEntities } from './htmlEntities.js';
 
 export interface ParsedItem {
   id: string;
@@ -23,18 +24,11 @@ const parser = new Parser({
 // Strip HTML tags and entities
 export function stripHtml(raw: string): string {
   if (!raw || typeof raw !== 'string') return '';
-  return raw
+  const noTags = raw
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/<[^>]+>/g, ' ');
+  return decodeHtmlEntities(noTags).replace(/\s+/g, ' ').trim();
 }
 
 function extractAuthor(rawItem: any): string {

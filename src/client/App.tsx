@@ -206,8 +206,18 @@ export const App: React.FC = () => {
     window.location.hash = `article-${article.id}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    if (autoSummarize && !article.ai_summary) {
-      fetchSummary(article, false);
+    const isOldOrBroken =
+      !article.ai_summary ||
+      article.ai_summary.includes('&ldquo;') ||
+      article.ai_summary.includes('&lsquo;') ||
+      article.ai_summary.includes('&ndash;') ||
+      article.ai_summary.includes('&oslash;') ||
+      article.ai_summary.includes('Franziska Kegel') ||
+      article.ai_summary.includes('### 📌 Key Highlights') ||
+      article.ai_summary.trim().length < 250;
+
+    if (autoSummarize && isOldOrBroken) {
+      fetchSummary(article, true);
     }
   };
 
