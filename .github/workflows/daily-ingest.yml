@@ -1,0 +1,23 @@
+name: Daily 5 AM Ingestion Trigger
+
+on:
+  schedule:
+    # 5:00 AM Asia/Dhaka (UTC+6) is 23:00 UTC (11:00 PM UTC previous day)
+    - cron: '0 23 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  trigger-ingestion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping PulsePaper Ingestion Endpoint
+        env:
+          APP_URL: ${{ secrets.RENDER_APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "Error: RENDER_APP_URL secret is not set. Please set it in your GitHub repository secrets."
+            exit 1
+          fi
+          echo "Pinging $APP_URL/api/ingest at $(date)..."
+          curl -s -X POST "$APP_URL/api/ingest" -H "Content-Type: application/json" --max-time 120
+          echo "Ingestion ping completed."

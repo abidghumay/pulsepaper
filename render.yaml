@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: pulsepaper-dashboard
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: CRON_SCHEDULE
+        value: "0 5 * * *"
+      - key: CRON_TIMEZONE
+        value: "Asia/Dhaka"
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
